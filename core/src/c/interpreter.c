@@ -25,6 +25,7 @@
 #include "gc.h"
 #include "ast.h"
 #include "module.h"  // Phase 8: Module system
+#include "vm.h"      // bytecode-backed functions and methods
 #include "repl.h"    // Phase 12: REPL error recovery
 
 Environment* g_global_env = NULL;
@@ -519,7 +520,13 @@ static Value str_native(int argCount, Value* args) {
     }
     if (args[0].type == VAL_INSTANCE && args[0].as.instance->class_def) {
         Method* str_method = class_find_method(args[0].as.instance->class_def, "__str__", 7);
-        if (str_method) {
+        if (str_method && str_method->is_vm) {
+            ExecResult str_res = sage_vm_call_method(args[0], str_method, 0, NULL, g_global_env);
+            if (!str_res.is_throwing && str_res.value.type == VAL_STRING) {
+                return str_res.value;
+            }
+        }
+        if (str_method && !str_method->is_vm) {
             Stmt* method_node = (Stmt*)str_method->method_stmt;
             ProcStmt* str_stmt = (method_node->type == STMT_ASYNC_PROC) ? &method_node->as.async_proc : &method_node->as.proc;
             Env* def_env = args[0].as.instance->class_def->defining_env;
@@ -1215,6 +1222,26 @@ static Value dict_values_native(int argCount, Value* args) {
     if (argCount != 1) return val_nil();
     if (!IS_DICT(args[0])) return val_nil();
     return dict_values(&args[0]);
+}
+
+/* Normalize a for-loop iterable to an array. Arrays pass through unchanged;
+ * dicts become their key array; tuples become a copy of their elements. The
+ * bytecode compiler's index-based loop uses ARRAY_LEN/GET_INDEX, which only
+ * understands arrays, so dict iteration in compiled modules needs this. */
+static Value iter_array_native(int argCount, Value* args) {
+    if (argCount != 1) return val_nil();
+    Value v = args[0];
+    if (IS_ARRAY(v)) return v;
+    if (IS_DICT(v)) return dict_keys(&v);
+    if (IS_TUPLE(v)) {
+        TupleValue* t = v.as.tuple;
+        Value out = val_array();
+        for (int i = 0; i < t->count; i++) {
+            array_push(&out, t->elements[i]);
+        }
+        return out;
+    }
+    return val_nil();
 }
 
 static Value dict_has_native(int argCount, Value* args) {
@@ -3230,6 +3257,7 @@ void init_stdlib(Env* env) {
     // Dictionary functions
     env_define_const(env, "dict_keys", 9, val_native(dict_keys_native));
     env_define_const(env, "dict_values", 11, val_native(dict_values_native));
+    env_define_const(env, "__sage_iter_array__", 19, val_native(iter_array_native));
     env_define_const(env, "dict_has", 8, val_native(dict_has_native));
     env_define_const(env, "dict_delete", 11, val_native(dict_delete_native));
 
@@ -3455,20 +3483,25 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
             Method* eq_method = class_find_method(left.as.instance->class_def, "__eq__", 6);
             if (eq_method) {
                 AST_GC_PUSH(right);
-                Stmt* method_node = (Stmt*)eq_method->method_stmt;
-                ProcStmt* proc = (method_node->type == STMT_ASYNC_PROC) ? &method_node->as.async_proc : &method_node->as.proc;
-                Env* defining = left.as.instance->class_def->defining_env;
-                Env* method_env = env_create(defining ? defining : env);
+                if (eq_method->is_vm) {
+                    ExecResult eq_res = sage_vm_call_method(left, eq_method, 1, &right, env);
+                    equal = !eq_res.is_throwing && is_truthy(eq_res.value);
+                } else {
+                    Stmt* method_node = (Stmt*)eq_method->method_stmt;
+                    ProcStmt* proc = (method_node->type == STMT_ASYNC_PROC) ? &method_node->as.async_proc : &method_node->as.proc;
+                    Env* defining = left.as.instance->class_def->defining_env;
+                    Env* method_env = env_create(defining ? defining : env);
 
-                env_define(method_env, "self", 4, left);
-                int p_start = (proc->param_count > 0 &&
-                              strncmp(proc->params[0].start, "self", 4) == 0) ? 1 : 0;
-                if (p_start < proc->param_count) {
-                    env_define(method_env, proc->params[p_start].start,
-                               proc->params[p_start].length, right);
+                    env_define(method_env, "self", 4, left);
+                    int p_start = (proc->param_count > 0 &&
+                                  strncmp(proc->params[0].start, "self", 4) == 0) ? 1 : 0;
+                    if (p_start < proc->param_count) {
+                        env_define(method_env, proc->params[p_start].start,
+                                   proc->params[p_start].length, right);
+                    }
+                    ExecResult eq_res = interpret(proc->body, method_env);
+                    equal = !eq_res.is_throwing && is_truthy(eq_res.value);
                 }
-                ExecResult eq_res = interpret(proc->body, method_env);
-                equal = !eq_res.is_throwing && is_truthy(eq_res.value);
                 AST_GC_POP(); // pop right
             } else {
                 equal = values_equal(left, right);
@@ -4102,6 +4135,39 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                         return EVAL_RESULT(val_nil());
                     }
 
+                    if (method->is_vm) {
+                        if (expr->as.call.kw_names) {
+                            for (int i = 0; i < expr->as.call.arg_count; i++) {
+                                if (expr->as.call.kw_names[i]) {
+                                    fprintf(stderr, "Runtime Error: Keyword arguments are not supported for bytecode methods.\n");
+                                    AST_GC_POP();
+                                    return EVAL_RESULT(val_nil());
+                                }
+                            }
+                        }
+                        int arg_count = expr->as.call.arg_count;
+                        Value* vm_args = NULL;
+                        int pushed_args = 0;
+                        if (arg_count > 0) {
+                            vm_args = SAGE_ALLOC(sizeof(Value) * (size_t)arg_count);
+                            for (int i = 0; i < arg_count; i++) {
+                                ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
+                                if (arg_result.is_throwing) {
+                                    free(vm_args);
+                                    AST_GC_POP_N(1 + pushed_args);
+                                    return arg_result;
+                                }
+                                vm_args[i] = arg_result.value;
+                                AST_GC_PUSH(vm_args[i]);
+                                pushed_args++;
+                            }
+                        }
+                        ExecResult res = sage_vm_call_method(object, method, arg_count, vm_args, env);
+                        free(vm_args);
+                        AST_GC_POP_N(1 + pushed_args);
+                        return res;
+                    }
+
                     Stmt* method_node = (Stmt*)method->method_stmt;
                     ProcStmt* method_stmt = (method_node->type == STMT_ASYNC_PROC) ? &method_node->as.async_proc : &method_node->as.proc;
                     
@@ -4234,6 +4300,55 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 if (!method) {
                     fprintf(stderr, "Runtime Error: Parent class has no method '%.*s'.\n", method_token.length, method_token.start);
                     return EVAL_RESULT(val_nil());
+                }
+
+                if (method->is_vm) {
+                    if (expr->as.call.kw_names) {
+                        for (int i = 0; i < expr->as.call.arg_count; i++) {
+                            if (expr->as.call.kw_names[i]) {
+                                fprintf(stderr, "Runtime Error: Keyword arguments are not supported for bytecode methods.\n");
+                                return EVAL_RESULT(val_nil());
+                            }
+                        }
+                    }
+                    int arg_count = expr->as.call.arg_count;
+                    int arg_offset = 0;
+                    Value first_val = val_nil();
+                    int have_first = 0;
+                    if (arg_count > 0) {
+                        ExecResult first_res = eval_expr(expr->as.call.args[0], env);
+                        if (first_res.is_throwing) return first_res;
+                        first_val = first_res.value;
+                        have_first = 1;
+                        if (values_equal(first_val, self_val)) arg_offset = 1;
+                    }
+                    int count = arg_count - arg_offset;
+                    Value* vm_args = NULL;
+                    int pushed_args = 0;
+                    if (count > 0) {
+                        vm_args = SAGE_ALLOC(sizeof(Value) * (size_t)count);
+                        for (int i = 0; i < count; i++) {
+                            Value v;
+                            if (i == 0 && have_first) {
+                                v = first_val;
+                            } else {
+                                ExecResult ar = eval_expr(expr->as.call.args[i + arg_offset], env);
+                                if (ar.is_throwing) {
+                                    free(vm_args);
+                                    AST_GC_POP_N(pushed_args);
+                                    return ar;
+                                }
+                                v = ar.value;
+                            }
+                            vm_args[i] = v;
+                            AST_GC_PUSH(v);
+                            pushed_args++;
+                        }
+                    }
+                    ExecResult res = sage_vm_call_method(self_val, method, count, vm_args, env);
+                    free(vm_args);
+                    AST_GC_POP_N(pushed_args);
+                    return res;
                 }
 
                 Stmt* method_node = (Stmt*)method->method_stmt;
@@ -4394,7 +4509,44 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             }
 
             if (callee_value.type == VAL_FUNCTION) {
-                if (callee_value.as.function == NULL || callee_value.as.function->proc == NULL) {
+                if (callee_value.as.function == NULL) {
+                    fprintf(stderr, "Runtime Error: Attempted to call a null function.\n");
+                    AST_GC_POP();
+                    return EVAL_RESULT(val_nil());
+                }
+                if (callee_value.as.function->is_vm) {
+                    if (expr->as.call.kw_names) {
+                        for (int i = 0; i < expr->as.call.arg_count; i++) {
+                            if (expr->as.call.kw_names[i]) {
+                                fprintf(stderr, "Runtime Error: Keyword arguments are not supported for bytecode functions.\n");
+                                AST_GC_POP();
+                                return EVAL_RESULT(val_nil());
+                            }
+                        }
+                    }
+                    int count = expr->as.call.arg_count;
+                    if (count > 255) {
+                        fprintf(stderr, "Runtime Error: Too many arguments (%d, max 255).\n", count);
+                        AST_GC_POP();
+                        return EVAL_RESULT(val_nil());
+                    }
+                    Value args[255];
+                    int pushed_args = 0;
+                    for (int i = 0; i < count; i++) {
+                        ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
+                        if (arg_result.is_throwing) {
+                            AST_GC_POP_N(1 + pushed_args);
+                            return arg_result;
+                        }
+                        args[i] = arg_result.value;
+                        AST_GC_PUSH(args[i]);
+                        pushed_args++;
+                    }
+                    ExecResult res = sage_vm_call_function(callee_value, count, args, env);
+                    AST_GC_POP_N(1 + pushed_args);
+                    return res;
+                }
+                if (callee_value.as.function->proc == NULL) {
                     fprintf(stderr, "Runtime Error: Attempted to call a null function.\n");
                     AST_GC_POP();
                     return EVAL_RESULT(val_nil());
@@ -4606,7 +4758,8 @@ jitted:
                 AST_GC_PUSH_ENV(gen_closure);
                 int pushed_args = 0;
                 if (template->param_count > 0 && template->params != NULL) {
-                    Token* params = (Token*)template->params;
+                    Token* ast_params = (Token*)template->params;
+                    char** vm_names = (char**)template->params;
                     for (int i = 0; i < template->param_count; i++) {
                         ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
                         if (arg_result.is_throwing) { 
@@ -4616,12 +4769,22 @@ jitted:
                         }
                         AST_GC_PUSH(arg_result.value);
                         pushed_args++;
-                        env_define_const(gen_closure, params[i].start, params[i].length, arg_result.value);
+                        if (template->vm_function != NULL) {
+                            env_define_const(gen_closure, vm_names[i],
+                                             (int)strlen(vm_names[i]), arg_result.value);
+                        } else {
+                            env_define_const(gen_closure, ast_params[i].start,
+                                             ast_params[i].length, arg_result.value);
+                        }
                     }
                 }
 
                 Value gen_res = val_generator(template->body, template->params,
                                                  template->param_count, gen_closure);
+                if (template->vm_function != NULL) {
+                    gen_res.as.generator->vm_function = template->vm_function;
+                    gen_res.as.generator->vm_function_index = template->vm_function_index;
+                }
                 AST_GC_POP_ENV();
                 AST_GC_POP_N(1 + pushed_args);
                 return EVAL_RESULT(gen_res);
@@ -4635,6 +4798,39 @@ jitted:
 
                 Method* init_method = class_find_method(class_def, "init", 4);
                 if (init_method) {
+                    if (init_method->is_vm) {
+                        if (expr->as.call.kw_names) {
+                            for (int i = 0; i < expr->as.call.arg_count; i++) {
+                                if (expr->as.call.kw_names[i]) {
+                                    fprintf(stderr, "Runtime Error: Keyword arguments are not supported for bytecode initializers.\n");
+                                    AST_GC_POP_N(2);
+                                    return EVAL_RESULT(val_nil());
+                                }
+                            }
+                        }
+                        int arg_count = expr->as.call.arg_count;
+                        Value* vm_args = NULL;
+                        int pushed_args = 0;
+                        if (arg_count > 0) {
+                            vm_args = SAGE_ALLOC(sizeof(Value) * (size_t)arg_count);
+                            for (int i = 0; i < arg_count; i++) {
+                                ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
+                                if (arg_result.is_throwing) {
+                                    free(vm_args);
+                                    AST_GC_POP_N(2 + pushed_args);
+                                    return arg_result;
+                                }
+                                vm_args[i] = arg_result.value;
+                                AST_GC_PUSH(vm_args[i]);
+                                pushed_args++;
+                            }
+                        }
+                        ExecResult init_res = sage_vm_call_method(inst_val, init_method, arg_count, vm_args, env);
+                        free(vm_args);
+                        AST_GC_POP_N(2 + pushed_args);
+                        if (init_res.is_throwing) return init_res;
+                        return EVAL_RESULT(inst_val);
+                    }
                     Stmt* init_node = (Stmt*)init_method->method_stmt;
                     ProcStmt* init_stmt = (init_node->type == STMT_ASYNC_PROC) ? &init_node->as.async_proc : &init_node->as.proc;
                     Env* def_env = class_def->defining_env;
@@ -4834,6 +5030,17 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                 Method* str_method = class_find_method(result.value.as.instance->class_def, "__str__", 7);
                 if (str_method) {
                     AST_GC_PUSH(result.value);
+                    if (str_method->is_vm) {
+                        ExecResult str_res = sage_vm_call_method(result.value, str_method, 0, NULL, env);
+                        if (!str_res.is_throwing && str_res.value.type == VAL_STRING) {
+                            printf("%s\n", AS_STRING(str_res.value));
+                        } else {
+                            print_value(result.value);
+                            printf("\n");
+                        }
+                        AST_GC_POP();
+                        return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
+                    }
                     Stmt* method_node = (Stmt*)str_method->method_stmt;
                     ProcStmt* str_stmt = (method_node->type == STMT_ASYNC_PROC) ? &method_node->as.async_proc : &method_node->as.proc;
                     Env* def_env = result.value.as.instance->class_def->defining_env;

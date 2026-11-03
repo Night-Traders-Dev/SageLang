@@ -256,6 +256,10 @@ Value val_generator(void* body, void* params, int param_count, Environment* clos
     v.as.generator->is_exhausted = 0;
     v.as.generator->current_stmt = NULL;
     v.as.generator->has_resume_target = 0;
+    v.as.generator->saved_ip_offset = 0;
+    v.as.generator->saved_stack_count = 0;
+    v.as.generator->vm_function_index = -1;
+    v.as.generator->vm_function = NULL;
     return v;
 }
 

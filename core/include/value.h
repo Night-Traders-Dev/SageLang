@@ -73,6 +73,7 @@ typedef struct {
     int saved_ip_offset;     // IP offset within bytecode chunk to resume at
     int saved_stack_count;   // Stack depth to restore on resume
     int vm_function_index;   // Index into BytecodeProgram.functions[]
+    BytecodeFunction* vm_function; // Compiled body when this is a VM generator template
 } GeneratorValue;
 
 // PHASE 8: Function value structure (for module exports)

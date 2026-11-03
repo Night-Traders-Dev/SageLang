@@ -595,7 +595,13 @@ static int stmt_requires_ast_fallback(BytecodeCompiler* compiler, Stmt* stmt) {
             // beats a silently broken artifact.
             return stmt->as.import.import_all ? 0 : 1;
         case STMT_CLASS:
+            return compiler->build_function == NULL;
         case STMT_PROC:
+            /* Generator procs keep their AST body: the VM's generator resume
+             * path does not preserve the value stack across yields, so a
+             * compiled generator loses its locals on the second next(). The
+             * interpreter's generator path already handles them correctly. */
+            if (stmt_contains_yield((Stmt*)stmt->as.proc.body)) return 1;
             return compiler->build_function == NULL;
         case STMT_ASYNC_PROC:
             /* An async proc used to be forced down the AST path unconditionally,
@@ -1058,7 +1064,18 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
         case STMT_FOR: {
             Token loop_var = stmt->as.for_stmt.variable;
 
+            /* The loop below indexes the iterable with ARRAY_LEN/GET_INDEX,
+             * which only understands arrays. Normalize dicts and tuples to an
+             * array first so `for key in dict` works in compiled modules too. */
+            Token iter_array_token = {0};
+            iter_array_token.start = "__sage_iter_array__";
+            iter_array_token.length = 19;
+            iter_array_token.line = loop_var.line;
+            iter_array_token.column = loop_var.column;
+            if (!emit_name_op(compiler, BC_OP_GET_GLOBAL, iter_array_token)) return 0;
             if (!compile_expr(compiler, stmt->as.for_stmt.iterable)) break;
+            if (!emit_op(compiler, BC_OP_CALL, loop_var.line, loop_var.column)) return 0;
+            if (!emit_u8(compiler, 1, loop_var.line, loop_var.column)) return 0;
             /* The iterable and the running index stay on the VM stack for the
              * whole loop, below the loop variable. Locals are addressed by
              * stack slot, so both need local entries or resolve_local() gives

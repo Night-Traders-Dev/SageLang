@@ -196,7 +196,7 @@ proc token_type_name(t):
 
 # Token class
 class Token:
-    proc init(tok_type, text, tok_line):
+    proc init(tok_type, text, tok_line = 1):
         self.type = tok_type
         self.text = text
         self.line = tok_line

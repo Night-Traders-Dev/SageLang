@@ -191,6 +191,7 @@ static int vm_validate_chunk(const BytecodeChunk* chunk) {
 
 // Forward declarations
 static ExecResult call_function_value(Value callee, int arg_count, Value* args, Env* env);
+static ExecResult call_function_value_impl(Value callee, int arg_count, Value* args, Env* env, Value* self);
 static ExecResult call_method_value(Value object, const char* method_name, int arg_count, Value* args, Env* env);
 
 static ExecResult call_any_method(Value object, Method* method, int arg_count, Value* args, Env* env) {
@@ -202,6 +203,19 @@ static ExecResult call_any_method(Value object, Method* method, int arg_count, V
         Value func_val;
         func_val.type = VAL_FUNCTION;
         func_val.as.function = func;
+
+        /* Methods compiled from self-hosted modules declare `self`
+         * implicitly: their parameter list is just the user-visible arguments.
+         * Those need self bound in the method scope and must not have an extra
+         * argument prepended, or every call is one argument over. Classes
+         * written for the VM declare self explicitly and take the old path. */
+        BytecodeFunction* bcf = func->vm_function;
+        int explicit_self = (bcf != NULL && bcf->param_count > 0 &&
+                             bcf->params != NULL && bcf->params[0] != NULL &&
+                             strcmp(bcf->params[0], "self") == 0);
+        if (!explicit_self) {
+            return call_function_value_impl(func_val, arg_count, args, env, &object);
+        }
 
         Value* method_args = SAGE_ALLOC(sizeof(Value) * (size_t)(arg_count + 1));
         method_args[0] = object;
@@ -256,6 +270,21 @@ static ExecResult call_any_method(Value object, Method* method, int arg_count, V
     }
 
     return interpret(method_stmt->body, method_env);
+}
+
+/* Public entry points for the AST interpreter.
+ *
+ * Module functions and methods are compiled to bytecode, so their
+ * FunctionValue has proc == NULL and their Method has is_vm == 1. The AST
+ * evaluator used to reject the former as a null function and cast the latter
+ * to a ProcStmt, which read freed memory. Both now hand the call to the VM
+ * through these wrappers. */
+ExecResult sage_vm_call_function(Value callee, int arg_count, Value* args, Env* env) {
+    return call_function_value(callee, arg_count, args, env);
+}
+
+ExecResult sage_vm_call_method(Value object, Method* method, int arg_count, Value* args, Env* env) {
+    return call_any_method(object, method, arg_count, args, env);
 }
 
 /* ===========================================================================
@@ -463,7 +492,7 @@ static Value vm_await_value(Value v) {
     return fut == NULL ? val_nil() : fut->result;
 }
 
-static ExecResult call_function_value(Value callee, int arg_count, Value* args, Env* env) {
+static ExecResult call_function_value_impl(Value callee, int arg_count, Value* args, Env* env, Value* self) {
     if (callee.type == VAL_NATIVE) {
         return vm_normal(callee.as.native(arg_count, args));
     }
@@ -515,6 +544,9 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
             }
 
             Env* scope = env_create(callee.as.function->closure);
+            if (self != NULL) {
+                env_define(scope, "self", 4, *self);
+            }
             int supplied = arg_count < function->param_count ? arg_count : function->param_count;
             Value* stack_args = NULL;
             if (function->param_count > 0) {
@@ -656,6 +688,18 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
         }
 
         Env* closure = env_create(template->closure);
+        if (template->vm_function != NULL) {
+            /* Compiled generator template: params are char* names, not Tokens. */
+            char** names = (char**)template->params;
+            for (int i = 0; i < template->param_count; i++) {
+                env_define(closure, names[i], (int)strlen(names[i]), args[i]);
+            }
+            Value gen = val_generator(NULL, template->params,
+                                      template->param_count, closure);
+            gen.as.generator->vm_function = template->vm_function;
+            gen.as.generator->vm_function_index = template->vm_function_index;
+            return vm_normal(gen);
+        }
         if (template->param_count > 0 && template->params != NULL) {
             Token* params = (Token*)template->params;
             for (int i = 0; i < template->param_count; i++) {
@@ -703,6 +747,10 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
     }
 
     return vm_error("Value is not callable.");
+}
+
+static ExecResult call_function_value(Value callee, int arg_count, Value* args, Env* env) {
+    return call_function_value_impl(callee, arg_count, args, env, NULL);
 }
 
 static ExecResult call_method_value(Value object, const char* method_name, int arg_count, Value* args, Env* env) {
@@ -2003,13 +2051,15 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
 ;
                  uint16_t function_index = READ_U16();
                 VM_CHECK_NAME_CONST(frame->chunk, name_index);
-                (void)name_index;
                 BytecodeProgram* program = frame->chunk->program;
                 if (program == NULL || function_index >= program->function_count) {
                     result = vm_error("Invalid generator function index.");
                     goto done;
                 }
-                Value gen_val = val_generator(NULL, NULL, 0, frame->closure);
+                BytecodeFunction* gen_fn = &program->functions[function_index];
+                gc_pin();
+                Value gen_val = val_generator(NULL, gen_fn->params,
+                                              gen_fn->param_count, frame->closure);
                 GeneratorValue* gen = gen_val.as.generator;
                 gen->is_started = 0;
                 gen->is_exhausted = 0;
@@ -2017,7 +2067,14 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 gen->saved_ip_offset = 0;
                 gen->saved_stack_count = 0;
                 gen->vm_function_index = function_index;
-                PUSH(gen_val);
+                gen->vm_function = gen_fn;
+                /* The proc statement expects this opcode to bind the name, the
+                 * way DEFINE_FUNCTION does; pushing the generator instead left
+                 * it undefined and leaked a stack slot. */
+                Value gen_name = constants[name_index];
+                env_define(frame->closure, AS_STRING(gen_name),
+                           (int)strlen(AS_STRING(gen_name)), gen_val);
+                gc_unpin();
                 DISPATCH();
             }
              BC_OP_GENERATOR_NEXT: {
@@ -2076,7 +2133,9 @@ static ExecResult vm_execute_generator(GeneratorValue* gen, Env* caller_env) {
     if (gen == NULL) return vm_error("Invalid generator value.");
     BytecodeChunk* gen_chunk = NULL;
     int fn_idx = gen->vm_function_index;
-    if (fn_idx >= 0 && g_active_vm && g_active_vm->chunk && g_active_vm->chunk->program) {
+    if (gen->vm_function != NULL) {
+        gen_chunk = &gen->vm_function->chunk;
+    } else if (fn_idx >= 0 && g_active_vm && g_active_vm->chunk && g_active_vm->chunk->program) {
         BytecodeProgram* program = g_active_vm->chunk->program;
         if (fn_idx < program->function_count) {
             gen_chunk = &program->functions[fn_idx].chunk;
