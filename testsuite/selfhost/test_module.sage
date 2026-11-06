@@ -81,6 +81,7 @@ assert_eq(mod2.is_loading, false, "module not loading initially")
 
 # Create test directory and file
 let test_dir = "/tmp/sage_test_modules"
+io.mkdir(test_dir)
 io.writefile(test_dir + "/testmod.sage", "let x = 42")
 
 let cache2 = module.ModuleCache()

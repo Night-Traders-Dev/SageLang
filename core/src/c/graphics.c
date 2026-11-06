@@ -209,6 +209,22 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "ATTR_VEC4",  9,  val_number(SAGE_ATTR_VEC4));
     env_define(e, "ATTR_INT",   8,  val_number(SAGE_ATTR_INT));
     env_define(e, "ATTR_UINT",  9,  val_number(SAGE_ATTR_UINT));
+    env_define(e, "FORMAT_RG8",       10, val_number(SAGE_FORMAT_RG8));
+    env_define(e, "FORMAT_RG16F", 12, val_number(SAGE_FORMAT_RG16F));
+    env_define(e, "FORMAT_R16F", 11, val_number(SAGE_FORMAT_R16F));
+    env_define(e, "IMAGE_1D",  8, val_number(SAGE_IMAGE_1D));
+    env_define(e, "IMAGE_CUBE",10, val_number(SAGE_IMAGE_CUBE));
+    env_define(e, "ADDRESS_MIRRORED_REPEAT", 23, val_number(SAGE_ADDRESS_MIRRORED_REPEAT));
+    env_define(e, "ADDRESS_CLAMP_BORDER",    20, val_number(SAGE_ADDRESS_CLAMP_BORDER));
+    env_define(e, "DESC_SAMPLER",         12, val_number(SAGE_DESC_SAMPLER));
+    env_define(e, "TOPO_LINE_STRIP",     15, val_number(SAGE_TOPO_LINE_STRIP));
+    env_define(e, "TOPO_TRIANGLE_FAN",   17, val_number(SAGE_TOPO_TRIANGLE_FAN));
+    env_define(e, "POLY_POINT", 10, val_number(SAGE_POLY_POINT));
+    env_define(e, "CULL_FRONT", 10, val_number(SAGE_CULL_FRONT));
+    env_define(e, "COMPARE_NEVER",   13, val_number(SAGE_COMPARE_NEVER));
+    env_define(e, "COMPARE_GREATER", 15, val_number(SAGE_COMPARE_GREATER));
+    env_define(e, "ACCESS_MEMORY_READ",   18, val_number(SAGE_ACCESS_MEMORY_READ));
+    env_define(e, "ACCESS_MEMORY_WRITE",  19, val_number(SAGE_ACCESS_MEMORY_WRITE));
 
     return m;
 }
@@ -5743,6 +5759,22 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "ATTR_VEC4",  9,  val_number(SAGE_ATTR_VEC4));
     env_define(e, "ATTR_INT",   8,  val_number(SAGE_ATTR_INT));
     env_define(e, "ATTR_UINT",  9,  val_number(SAGE_ATTR_UINT));
+    env_define(e, "FORMAT_RG8",       10, val_number(SAGE_FORMAT_RG8));
+    env_define(e, "FORMAT_RG16F", 12, val_number(SAGE_FORMAT_RG16F));
+    env_define(e, "FORMAT_R16F", 11, val_number(SAGE_FORMAT_R16F));
+    env_define(e, "IMAGE_1D",  8, val_number(SAGE_IMAGE_1D));
+    env_define(e, "IMAGE_CUBE",10, val_number(SAGE_IMAGE_CUBE));
+    env_define(e, "ADDRESS_MIRRORED_REPEAT", 23, val_number(SAGE_ADDRESS_MIRRORED_REPEAT));
+    env_define(e, "ADDRESS_CLAMP_BORDER",    20, val_number(SAGE_ADDRESS_CLAMP_BORDER));
+    env_define(e, "DESC_SAMPLER",         12, val_number(SAGE_DESC_SAMPLER));
+    env_define(e, "TOPO_LINE_STRIP",     15, val_number(SAGE_TOPO_LINE_STRIP));
+    env_define(e, "TOPO_TRIANGLE_FAN",   17, val_number(SAGE_TOPO_TRIANGLE_FAN));
+    env_define(e, "POLY_POINT", 10, val_number(SAGE_POLY_POINT));
+    env_define(e, "CULL_FRONT", 10, val_number(SAGE_CULL_FRONT));
+    env_define(e, "COMPARE_NEVER",   13, val_number(SAGE_COMPARE_NEVER));
+    env_define(e, "COMPARE_GREATER", 15, val_number(SAGE_COMPARE_GREATER));
+    env_define(e, "ACCESS_MEMORY_READ",   18, val_number(SAGE_ACCESS_MEMORY_READ));
+    env_define(e, "ACCESS_MEMORY_WRITE",  19, val_number(SAGE_ACCESS_MEMORY_WRITE));
 
     return m;
 }

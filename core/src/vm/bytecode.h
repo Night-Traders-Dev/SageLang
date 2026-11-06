@@ -150,6 +150,12 @@ typedef struct {
     int global_cache_size;
 
     struct BytecodeProgram* program;
+
+    /* Locals are stored in the call's environment instead of stack slots.
+     * Set for functions that create inline or nested procs, whose compiled
+     * closures capture the environment and must see the enclosing locals by
+     * name. */
+    int env_locals;
 } BytecodeChunk;
 
 void bytecode_chunk_init(BytecodeChunk* chunk);

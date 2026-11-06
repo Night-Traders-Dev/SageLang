@@ -36,6 +36,11 @@ typedef struct {
     void* build_function_data;
     int hoisted_local_count;
     int allow_return;
+    /* Locals live in the closure environment instead of stack slots. Used for
+     * functions that create inline or nested procs: a compiled closure captures
+     * the environment, not the creating frame's slot array, so slot locals
+     * would be invisible to the nested proc. */
+    int env_locals;
     char* error;
     size_t error_size;
     LoopContext loops[MAX_LOOP_DEPTH];
@@ -297,7 +302,7 @@ static void add_local(BytecodeCompiler* compiler, Token name) {
 }
 
 static int resolve_local(BytecodeCompiler* compiler, Token name) {
-    if (!compiler->locals_valid) return -1;
+    if (!compiler->locals_valid || compiler->env_locals) return -1;
     for (int i = compiler->local_count - 1; i >= 0; i--) {
         Local* local = &compiler->locals[i];
         if (local->name.length == name.length &&
@@ -495,7 +500,6 @@ static int emit_ast_stmt(BytecodeCompiler* compiler, Stmt* stmt) {
                                 "'import module' or 'import module as name'");
             return 0;
         }
-        printf("DEBUG: Unsupported stmt type %d requires AST fallback\n", stmt->type);
         set_error(compiler,
                   "Statement requires AST fallback and cannot be emitted as a compiled VM artifact yet.");
         return 0;
@@ -548,12 +552,12 @@ static int stmt_requires_ast_fallback(BytecodeCompiler* compiler, Stmt* stmt) {
     switch (stmt->type) {
         case STMT_BREAK:
         case STMT_CONTINUE:
-            if (compiler->loop_depth <= 0) { printf("DEBUG: break/continue outside loop\n"); return 1; }
+            if (compiler->loop_depth <= 0) return 1;
             return 0;
         case STMT_YIELD:
             return 0;
         case STMT_RETURN:
-            if (!compiler->allow_return) { printf("DEBUG: STMT_RETURN not allowed\n"); return 1; }
+            if (!compiler->allow_return) return 1;
             return 0;
         case STMT_BLOCK: {
             for (Stmt* current = stmt->as.block.statements; current != NULL; current = current->next) {
@@ -579,21 +583,15 @@ static int stmt_requires_ast_fallback(BytecodeCompiler* compiler, Stmt* stmt) {
         case STMT_TRY:
             return 0;
         case STMT_IMPORT:
-            // "import module" and "import module as alias" both compile
-            // natively: the emitter writes BC_OP_IMPORT and then
-            // BC_OP_DEFINE_GLOBAL naming the alias, or the last dotted segment
-            // when there is no alias. Rejecting the aliased form here was what
-            // made `import os as o` fail even though the emitter could already
-            // produce it.
-            //
-            // Only from-imports ("from module import a, b") need the richer
-            // per-item binding logic in interpreter.c. They must stay a hard
-            // error rather than a fallback: the walker is addressed by pointer
-            // into the live AST (vm.c reads chunk->ast_stmts[...]), and that
-            // table is not written into a .sgvm/.svm artifact, so a fallback
-            // opcode in a file would be unrunnable. A clear compile error
-            // beats a silently broken artifact.
-            return stmt->as.import.import_all ? 0 : 1;
+            // "import module", "import module as alias" and non-wildcard
+            // "from module import a, b as c" all compile natively now.
+            // Wildcard imports still need the interpreter's export walker.
+            if (!stmt->as.import.import_all && stmt->as.import.item_count == 1 &&
+                stmt->as.import.items != NULL && stmt->as.import.items[0] != NULL &&
+                strcmp(stmt->as.import.items[0], "*") == 0) {
+                return 1;
+            }
+            return 0;
         case STMT_CLASS:
             return compiler->build_function == NULL;
         case STMT_PROC:
@@ -680,9 +678,30 @@ static int compile_expr(BytecodeCompiler* compiler, Expr* expr) {
             }
             return emit_op(compiler, BC_OP_TUPLE, 0, 0) &&
                    emit_u16(compiler, (uint16_t)expr->as.tuple.count, 0, 0);
-        case EXPR_PROC:
-            set_error(compiler, "inline procedures are not compiled to bytecode yet.");
-            return 0;
+        case EXPR_PROC: {
+            if (compiler->build_function == NULL) {
+                set_error(compiler, "inline procedures require a function builder.");
+                return 0;
+            }
+            if (stmt_contains_yield(expr->as.proc_expr.body)) {
+                set_error(compiler, "inline generator procedures are not compiled to bytecode yet.");
+                return 0;
+            }
+            ProcStmt proc;
+            memset(&proc, 0, sizeof(proc));
+            proc.params = expr->as.proc_expr.params;
+            proc.param_count = expr->as.proc_expr.param_count;
+            proc.required_count = proc.param_count;
+            proc.body = expr->as.proc_expr.body;
+            int function_index = -1;
+            if (!compiler->build_function(compiler->build_function_data, &proc,
+                                          compiler->error, compiler->error_size,
+                                          &function_index)) {
+                return 0;
+            }
+            return emit_op(compiler, BC_OP_LOAD_FUNCTION, 0, 0) &&
+                   emit_u16(compiler, (uint16_t)function_index, 0, 0);
+        }
         case EXPR_DICT:
             for (int i = 0; i < expr->as.dict.count; i++) {
                 if (!emit_constant(compiler, val_string(expr->as.dict.keys[i]), 0, 0)) return 0;
@@ -967,7 +986,7 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             } else if (!emit_op(compiler, BC_OP_NIL, 0, 0)) {
                 return 0;
             }
-            if (compiler->locals_valid && compiler->scope_depth > 0) {
+            if (!compiler->env_locals && compiler->locals_valid && compiler->scope_depth > 0) {
                 int slot = resolve_local(compiler, stmt->as.let.name);
                 if (slot < 0) {
                     add_local(compiler, stmt->as.let.name);
@@ -1111,7 +1130,7 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
                 !emit_op(compiler, BC_OP_GET_INDEX, loop_var.line, loop_var.column)) {
                 return 0;
             }
-            if (compiler->locals_valid && compiler->scope_depth > 0) {
+            if (!compiler->env_locals && compiler->locals_valid && compiler->scope_depth > 0) {
                 int loop_slot = resolve_local(compiler, loop_var);
                 if (loop_slot < 0) {
                     add_local(compiler, loop_var);
@@ -1241,6 +1260,34 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             name_token.start = stmt->as.import.module_name;
             name_token.length = (int)strlen(stmt->as.import.module_name);
             if (!emit_name_op(compiler, BC_OP_IMPORT, name_token)) return 0;
+
+            if (!stmt->as.import.import_all) {
+                /* from module import a, b as c: IMPORT leaves the module on
+                 * the stack; duplicate it for each GET_PROPERTY and bind the
+                 * result. The module name itself is bound by IMPORT, matching
+                 * the interpreter's import_from closely enough for compiled
+                 * modules, and the items become globals so function-scope
+                 * imports are visible to later statements. */
+                for (int i = 0; i < stmt->as.import.item_count; i++) {
+                    if (!emit_dup(compiler, 0, 0, 0)) return 0;
+                    Token item_token = {0};
+                    item_token.start = stmt->as.import.items[i];
+                    item_token.length = (int)strlen(stmt->as.import.items[i]);
+                    if (!emit_name_op(compiler, BC_OP_GET_PROPERTY, item_token)) return 0;
+
+                    const char* bind_name = stmt->as.import.item_aliases != NULL
+                                                ? stmt->as.import.item_aliases[i]
+                                                : NULL;
+                    if (bind_name == NULL) bind_name = stmt->as.import.items[i];
+                    Token bind_token = {0};
+                    bind_token.start = bind_name;
+                    bind_token.length = (int)strlen(bind_name);
+                    if (!emit_name_op(compiler, BC_OP_DEFINE_GLOBAL, bind_token)) return 0;
+                }
+                if (!emit_op(compiler, BC_OP_POP, 0, 0)) return 0;
+                if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
+                return 1;
+            }
 
             const char* bind_name = stmt->as.import.alias;
             if (bind_name == NULL) {
@@ -1467,6 +1514,138 @@ int bytecode_compile_statement_with_functions(BytecodeChunk* chunk, Stmt* stmt, 
     return success;
 }
 
+static int expr_contains_inline_proc(Expr* expr);
+
+static int stmt_contains_inline_proc(Stmt* stmt) {
+    for (Stmt* current = stmt; current != NULL; current = current->next) {
+        switch (current->type) {
+            case STMT_PRINT:
+                if (expr_contains_inline_proc(current->as.print.expression)) return 1;
+                break;
+            case STMT_EXPRESSION:
+                if (expr_contains_inline_proc(current->as.expression)) return 1;
+                break;
+            case STMT_LET:
+                if (expr_contains_inline_proc(current->as.let.initializer)) return 1;
+                break;
+            case STMT_IF:
+                if (expr_contains_inline_proc(current->as.if_stmt.condition) ||
+                    stmt_contains_inline_proc(current->as.if_stmt.then_branch) ||
+                    stmt_contains_inline_proc(current->as.if_stmt.else_branch)) return 1;
+                break;
+            case STMT_BLOCK:
+                if (stmt_contains_inline_proc(current->as.block.statements)) return 1;
+                break;
+            case STMT_WHILE:
+                if (expr_contains_inline_proc(current->as.while_stmt.condition) ||
+                    stmt_contains_inline_proc(current->as.while_stmt.body)) return 1;
+                break;
+            case STMT_FOR:
+                if (expr_contains_inline_proc(current->as.for_stmt.iterable) ||
+                    stmt_contains_inline_proc(current->as.for_stmt.body)) return 1;
+                break;
+            case STMT_RETURN:
+                if (expr_contains_inline_proc(current->as.ret.value)) return 1;
+                break;
+            case STMT_DEFER:
+                if (stmt_contains_inline_proc(current->as.defer.statement)) return 1;
+                break;
+            case STMT_TRY:
+                if (stmt_contains_inline_proc(current->as.try_stmt.try_block) ||
+                    stmt_contains_inline_proc(current->as.try_stmt.finally_block)) return 1;
+                for (int i = 0; i < current->as.try_stmt.catch_count; i++) {
+                    if (stmt_contains_inline_proc(current->as.try_stmt.catches[i]->body)) return 1;
+                }
+                break;
+            case STMT_RAISE:
+                if (expr_contains_inline_proc(current->as.raise.exception)) return 1;
+                break;
+            case STMT_YIELD:
+                if (expr_contains_inline_proc(current->as.yield_stmt.value)) return 1;
+                break;
+            case STMT_PROC:
+            case STMT_ASYNC_PROC:
+                /* A nested proc is compiled to a closure that captures the
+                 * enclosing function's environment. If the enclosing function
+                 * kept its locals in stack slots, those names would not be in
+                 * that environment, so recursive/helper procs failed with
+                 * "Undefined variable." Force env-backed locals whenever a
+                 * function defines a nested proc. */
+                return 1;
+            case STMT_MATCH:
+                if (expr_contains_inline_proc(current->as.match_stmt.value) ||
+                    stmt_contains_inline_proc(current->as.match_stmt.default_case)) return 1;
+                for (int i = 0; i < current->as.match_stmt.case_count; i++) {
+                    CaseClause* clause = current->as.match_stmt.cases[i];
+                    if (expr_contains_inline_proc(clause->pattern) ||
+                        expr_contains_inline_proc(clause->guard) ||
+                        stmt_contains_inline_proc(clause->body)) return 1;
+                }
+                break;
+            default:
+                /* Class methods, imports, declarations and compile-time
+                 * constructs either own a separate function body or have no
+                 * runtime expression to inspect here. */
+                break;
+        }
+    }
+    return 0;
+}
+
+static int expr_contains_inline_proc(Expr* expr) {
+    if (expr == NULL) return 0;
+    switch (expr->type) {
+        case EXPR_PROC:
+            return 1;
+        case EXPR_BINARY:
+            return expr_contains_inline_proc(expr->as.binary.left) ||
+                   expr_contains_inline_proc(expr->as.binary.right);
+        case EXPR_CALL:
+            if (expr_contains_inline_proc(expr->as.call.callee)) return 1;
+            for (int i = 0; i < expr->as.call.arg_count; i++) {
+                if (expr_contains_inline_proc(expr->as.call.args[i])) return 1;
+            }
+            return 0;
+        case EXPR_ARRAY:
+            for (int i = 0; i < expr->as.array.count; i++) {
+                if (expr_contains_inline_proc(expr->as.array.elements[i])) return 1;
+            }
+            return 0;
+        case EXPR_INDEX:
+            return expr_contains_inline_proc(expr->as.index.array) ||
+                   expr_contains_inline_proc(expr->as.index.index);
+        case EXPR_INDEX_SET:
+            return expr_contains_inline_proc(expr->as.index_set.array) ||
+                   expr_contains_inline_proc(expr->as.index_set.index) ||
+                   expr_contains_inline_proc(expr->as.index_set.value);
+        case EXPR_DICT:
+            for (int i = 0; i < expr->as.dict.count; i++) {
+                if (expr_contains_inline_proc(expr->as.dict.values[i])) return 1;
+            }
+            return 0;
+        case EXPR_TUPLE:
+            for (int i = 0; i < expr->as.tuple.count; i++) {
+                if (expr_contains_inline_proc(expr->as.tuple.elements[i])) return 1;
+            }
+            return 0;
+        case EXPR_SLICE:
+            return expr_contains_inline_proc(expr->as.slice.array) ||
+                   expr_contains_inline_proc(expr->as.slice.start) ||
+                   expr_contains_inline_proc(expr->as.slice.end);
+        case EXPR_GET:
+            return expr_contains_inline_proc(expr->as.get.object);
+        case EXPR_SET:
+            return expr_contains_inline_proc(expr->as.set.object) ||
+                   expr_contains_inline_proc(expr->as.set.value);
+        case EXPR_AWAIT:
+            return expr_contains_inline_proc(expr->as.await.expression);
+        case EXPR_COMPTIME:
+            return expr_contains_inline_proc(expr->as.comptime.expression);
+        default:
+            return 0;
+    }
+}
+
 int bytecode_compile_function_body(BytecodeChunk* chunk, Stmt* body,
                                    char** params, int param_count,
                                    BytecodeBuildFunctionFn build_function,
@@ -1497,10 +1676,14 @@ int bytecode_compile_function_body(BytecodeChunk* chunk, Stmt* body,
         add_local(&compiler, t);
     }
 
+    compiler.env_locals = stmt_contains_inline_proc(body);
+    chunk->env_locals = compiler.env_locals;
     int params_before_hoist = compiler.local_count;
-    collect_function_locals(&compiler, body);
-    for (int i = params_before_hoist; i < compiler.local_count; i++) {
-        if (!emit_op(&compiler, BC_OP_NIL, 0, 0)) return 0;
+    if (!compiler.env_locals) {
+        collect_function_locals(&compiler, body);
+        for (int i = params_before_hoist; i < compiler.local_count; i++) {
+            if (!emit_op(&compiler, BC_OP_NIL, 0, 0)) return 0;
+        }
     }
 
     if (!compile_stmt(&compiler, body, 0)) {

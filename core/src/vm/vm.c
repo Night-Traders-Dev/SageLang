@@ -64,10 +64,14 @@ typedef struct ActiveVm {
   int call_arg_count;
 } ActiveVm;
 
-static int vm_pop_handler_for_frame(ActiveVm* vm, int frame_depth, int* index_out) {
+/* Find the nearest handler at or below `frame_depth`. A raise inside a called
+ * compiled function must unwind that frame (and any frames between it and the
+ * handler) before jumping; matching only the exact frame depth let exceptions
+ * escape through a caller's try/catch. */
+static int vm_find_handler_for_unwind(ActiveVm* vm, int frame_depth, int* index_out) {
     if (vm == NULL || frame_depth < 0) return 0;
     for (int i = vm->handler_count - 1; i >= 0; i--) {
-        if (vm->handlers[i].frame_depth == frame_depth) {
+        if (vm->handlers[i].frame_depth <= frame_depth) {
             if (index_out != NULL) *index_out = i;
             vm->handler_count = i;
             return 1;
@@ -1010,6 +1014,28 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
 #define READ_U8() (*ip++)
 #define READ_U16() (ip += 2, (uint16_t)(((unsigned int)ip[-2] << 8) | ip[-1]))
 
+#define VM_JUMP_TO_HANDLER(handler_index, exc_value) \
+    do { \
+        int _hi = (handler_index); \
+        int _hd = vm.handlers[_hi].frame_depth; \
+        int _ho = vm.handlers[_hi].handler_ip_offset; \
+        int _hs = vm.handlers[_hi].stack_depth; \
+        if (_hd < 0 || _hd >= frame_count || _ho < 0 || \
+            _ho >= frames[_hd].chunk->code_count || _hs < 0 || _hs > VM_STACK_MAX) { \
+            result = vm_error("VM exception handler state is invalid."); \
+            goto done; \
+        } \
+        frame_count = _hd + 1; \
+        frame = &frames[_hd]; \
+        ip = frame->chunk->code + _ho; \
+        ip_end = frame->chunk->code + frame->chunk->code_count; \
+        constants = frame->chunk->constants; \
+        sp = vm.stack + _hs; \
+        frame->closure = vm.handlers[_hi].env; \
+        PUSH((exc_value)); \
+        DISPATCH(); \
+    } while (0)
+
 #ifdef __GNUC__
     DISPATCH();
 #endif
@@ -1588,13 +1614,22 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                      * The callee and its arguments are live roots while the new
                      * frame runs, including any defaults just pushed above. */
                     SYNC_SP();
+                    Env* call_closure = callee.as.function->closure;
+                    if (bcf->chunk.env_locals) {
+                        call_closure = env_create(callee.as.function->closure);
+                        Value* supplied = sp - arg_count;
+                        for (int i = 0; i < arg_count; i++) {
+                            env_define(call_closure, bcf->params[i],
+                                       (int)strlen(bcf->params[i]), supplied[i]);
+                        }
+                    }
                     frame->ip = ip;
                      frame = &frames[frame_count++];
                      frame->chunk = &bcf->chunk;
                      frame->ip = bcf->chunk.code;
                      frame->ip_end = bcf->chunk.code + bcf->chunk.code_count;
                      frame->slots = sp - arg_count;
-                     frame->closure = callee.as.function->closure;
+                     frame->closure = call_closure;
                      frame->return_base = frame->slots - 1;
                     
                     ip = frame->ip;
@@ -1608,19 +1643,8 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                     sp -= (arg_count + 1);
                      if (call_result.is_throwing) {
                          int handler_index;
-                         if (vm_pop_handler_for_frame(&vm, frame_count - 1, &handler_index)) {
-                             int handler_offset = vm.handlers[handler_index].handler_ip_offset;
-                             int handler_depth = vm.handlers[handler_index].stack_depth;
-                             if (handler_offset < 0 || handler_offset >= frame->chunk->code_count ||
-                                 handler_depth < 0 || handler_depth > VM_STACK_MAX) {
-                                 result = vm_error("VM exception handler state is invalid.");
-                                 goto done;
-                             }
-                             ip = frame->chunk->code + handler_offset;
-                             sp = vm.stack + handler_depth;
-                             frame->closure = vm.handlers[handler_index].env;
-                             PUSH(call_result.exception_value);
-                            DISPATCH();
+                         if (vm_find_handler_for_unwind(&vm, frame_count - 1, &handler_index)) {
+                            VM_JUMP_TO_HANDLER(handler_index, call_result.exception_value);
                         } else {
                             result = call_result;
                             goto done;
@@ -1684,13 +1708,22 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                              * a collection inside the method freed the receiver's
                              * fields, which later showed up as a nil property. */
                             SYNC_SP();
+                            Env* method_closure = method_fn->closure;
+                            if (bcf->chunk.env_locals) {
+                                method_closure = env_create(method_fn->closure);
+                                for (int i = 0; i < bcf->param_count; i++) {
+                                    env_define(method_closure, bcf->params[i],
+                                               (int)strlen(bcf->params[i]),
+                                               supplied_values[i]);
+                                }
+                            }
                             frame->ip = ip;
                             frame = &frames[frame_count++];
                             frame->chunk = &bcf->chunk;
                             frame->ip = bcf->chunk.code;
                             frame->ip_end = bcf->chunk.code + bcf->chunk.code_count;
                             frame->slots = supplied_values;
-                            frame->closure = method_fn->closure;
+                            frame->closure = method_closure;
                             frame->return_base = supplied_values;
                             ip = frame->ip;
                             ip_end = frame->ip_end;
@@ -1704,19 +1737,8 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 sp -= (arg_count + 1);
                  if (call_result.is_throwing) {
                      int handler_index;
-                     if (vm_pop_handler_for_frame(&vm, frame_count - 1, &handler_index)) {
-                         int handler_offset = vm.handlers[handler_index].handler_ip_offset;
-                         int handler_depth = vm.handlers[handler_index].stack_depth;
-                         if (handler_offset < 0 || handler_offset >= frame->chunk->code_count ||
-                             handler_depth < 0 || handler_depth > VM_STACK_MAX) {
-                             result = vm_error("VM exception handler state is invalid.");
-                             goto done;
-                         }
-                         ip = frame->chunk->code + handler_offset;
-                         sp = vm.stack + handler_depth;
-                         frame->closure = vm.handlers[handler_index].env;
-                         PUSH(call_result.exception_value);
-                         DISPATCH();
+                     if (vm_find_handler_for_unwind(&vm, frame_count - 1, &handler_index)) {
+                         VM_JUMP_TO_HANDLER(handler_index, call_result.exception_value);
                      } else {
                          result = call_result;
                          goto done;
@@ -1953,19 +1975,8 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 if (IS_STRING(exc_val)) exc_val = val_exception(AS_STRING(exc_val));
                 else if (IS_NUMBER(exc_val)) { char buf[64]; snprintf(buf, sizeof(buf), "%.14g", AS_NUMBER(exc_val)); exc_val = val_exception(buf); }
                   int handler_index;
-                  if (vm_pop_handler_for_frame(&vm, frame_count - 1, &handler_index)) {
-                      int handler_offset = vm.handlers[handler_index].handler_ip_offset;
-                      int handler_depth = vm.handlers[handler_index].stack_depth;
-                      if (handler_offset < 0 || handler_offset >= frame->chunk->code_count ||
-                          handler_depth < 0 || handler_depth > VM_STACK_MAX) {
-                          result = vm_error("VM exception handler state is invalid.");
-                          goto done;
-                      }
-                      ip = frame->chunk->code + handler_offset;
-                      sp = vm.stack + handler_depth;
-                      frame->closure = vm.handlers[handler_index].env;
-                      PUSH(exc_val);
-                     DISPATCH();
+                  if (vm_find_handler_for_unwind(&vm, frame_count - 1, &handler_index)) {
+                      VM_JUMP_TO_HANDLER(handler_index, exc_val);
                  } else { result.value = val_nil(); result.is_throwing = 1; result.exception_value = exc_val; goto done; }
 
             }
