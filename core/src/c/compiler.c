@@ -1,11 +1,8 @@
-/* Depth of the per-function expression-temporary pool. Must match the
- * SAGE_TMP_SLOTS value emitted into generated code.
- *
- * Sized for the longest operator chain in the tree rather than for the typical
- * case: every module in SageFS saturated a 24-slot pool, because a concatenation
- * like "a=" + str(x) + " b=" + str(y) + ... nests one level per term and the
- * longest log message in a file sets the floor. Each slot is a pointer in the
- * frame's root array, so this costs 8 bytes of stack per frame per slot. */
+/* Maximum depth of the expression-temporary pool. Regular functions emit and
+ * root an exact-size pool based on the deepest operator chain in their body;
+ * main uses this maximum because it runs once and can contain arbitrarily deep
+ * concatenations. The value must match the SAGE_TMP_SLOTS define emitted into
+ * generated code. */
 #define SAGE_TMP_SLOTS 64
 
 #define _DEFAULT_SOURCE
@@ -139,6 +136,10 @@ typedef struct {
    * composite expression claims the next slots so sibling operands cannot
    * overwrite each other before the parent consumes them. */
   int tmp_depth;
+  /* Deepest temporary-pool index reached while emitting the current function
+   * body. Functions allocate and root only this many slots; main keeps the
+   * full SAGE_TMP_SLOTS pool because it runs once. */
+  int max_tmp_depth;
   FunctionInfo *functions;
   FunctionInfo *current_function;
   FunctionInfo *main_function;
@@ -2635,6 +2636,9 @@ static char *emit_binary_expr(Compiler *compiler, BinaryExpr *binary) {
   }
   if (d + 2 <= SAGE_TMP_SLOTS) {
     compiler->tmp_depth = d + 2;
+    if (compiler->tmp_depth > compiler->max_tmp_depth) {
+      compiler->max_tmp_depth = compiler->tmp_depth;
+    }
     char *l2 = emit_expr(compiler, binary->left);
     char *r2 = emit_expr(compiler, binary->right);
     compiler->tmp_depth = d;
@@ -4613,7 +4617,8 @@ static char *emit_set_expr(Compiler *compiler, SetExpr *set) {
     sb_init(&sb);
     sb_appendf(&sb,
                "({SageValue _obj = %s; SageValue _val = %s; "
-               "sage_dict_set(_obj.as.dict, \"%s\", _val); _val;})",
+               "sage_dict_set(_obj.as.dict, sage_string_const(\"%s\").as.string, "
+               "_val); _val;})",
                obj, val, escaped);
     free(obj);
     free(prop);
@@ -5552,7 +5557,9 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
           "#include \"hardware/adc.h\"\n"
           "#include \"hardware/clocks.h\"\n"
           "#include \"hardware/pio.h\"\n"
-          "#include \"hardware/spi.h\"\n",
+          "#include \"hardware/spi.h\"\n"
+          "#define SAGE_GC_MIN_TRIGGER_BYTES 1048576UL\n"
+          "#define SAGE_GC_MIN_TRIGGER_OBJECTS 2048\n",
           out);
   } else {
     fputs("#define _POSIX_C_SOURCE 200809L\n"
@@ -5571,7 +5578,9 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
           "#include <pthread.h>\n"
           "#include <stdint.h>\n"
           "#include <sys/stat.h>\n"
-          "#include <sys/types.h>\n",
+          "#include <sys/types.h>\n"
+          "#define SAGE_GC_MIN_TRIGGER_BYTES 8388608UL\n"
+          "#define SAGE_GC_MIN_TRIGGER_OBJECTS 16384\n",
           out);
   }
 
@@ -5588,7 +5597,9 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "   * evaluates call arguments right to left, so in \"x\" + str(a) + \".\" + str(b) the\n"
       "   * literal \".\" is allocated after str(b) is produced, and that allocation freed\n"
       "   * str(b) before the outer + read it. Pinning the GC instead silences collection for\n"
-      "   * allocations a call workload depends on, so rooting is the fix. */\n"
+      "   * allocations a call workload depends on, so rooting is the fix.\n"
+      "   * Regular functions declare only the slots their body uses; main uses\n"
+      "   * the full SAGE_TMP_SLOTS pool. */\n"
       "#define SAGE_TMP_SLOTS 64\n"
         "typedef struct SageGcHeader SageGcHeader;\n"
         "typedef struct SageGcFrame SageGcFrame;\n"
@@ -5706,8 +5717,12 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    int enabled;\n"
         "} SageGcState;\n"
         "\n"
+         "#ifndef SAGE_GC_MIN_TRIGGER_BYTES\n"
          "#define SAGE_GC_MIN_TRIGGER_BYTES 1048576UL\n"
+         "#endif\n"
+         "#ifndef SAGE_GC_MIN_TRIGGER_OBJECTS\n"
          "#define SAGE_GC_MIN_TRIGGER_OBJECTS 2048\n"
+         "#endif\n"
          "static SageGcState sage_gc = {NULL, NULL, 0, 0, 0, 0, 0, "
          "SAGE_GC_MIN_TRIGGER_BYTES, SAGE_GC_MIN_TRIGGER_OBJECTS, 1};\n"
         "\n"
@@ -6906,7 +6921,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "        if (!data) { fclose(f); return sage_nil(); }\n"
       "        if (size > 0 && fread(data, 1, (size_t)size, f) != (size_t)size) { free(data); fclose(f); return sage_nil(); }\n"
       "        fclose(f);\n"
-      "        SageBytes* bytes = (SageBytes*)malloc(sizeof(SageBytes));\n"
+      "        SageBytes* bytes = (SageBytes*)sage_gc_alloc(SAGE_GC_BYTES, sizeof(SageBytes));\n"
       "        if (!bytes) { free(data); return sage_nil(); }\n"
       "        bytes->data = data; bytes->count = (int)size;\n"
       "        SageValue v; v.type = SAGE_TAG_BYTES; v.as.bytes = bytes; return v;\n"
@@ -6930,7 +6945,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    return arr;\n"
       "}\n"
       "static SageValue sage_bytes_value(unsigned char* data, int count) {\n"
-      "    SageBytes* b = (SageBytes*)malloc(sizeof(SageBytes));\n"
+      "    SageBytes* b = (SageBytes*)sage_gc_alloc(SAGE_GC_BYTES, sizeof(SageBytes));\n"
       "    if (!b) return sage_nil();\n"
       "    if (count == 0) { b->data = NULL; b->count = 0; }\n"
       "    else { b->data = data; b->count = count; }\n"
@@ -6955,7 +6970,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    if (!buf) { fclose(f); return sage_nil(); }\n"
       "    size_t got = fread(buf, 1, want, f);\n"
       "    fclose(f);\n"
-      "    SageBytes* bytes = (SageBytes*)malloc(sizeof(SageBytes));\n"
+      "    SageBytes* bytes = (SageBytes*)sage_gc_alloc(SAGE_GC_BYTES, sizeof(SageBytes));\n"
       "    if (!bytes) { free(buf); fclose(f); return sage_nil(); }\n"
       "    bytes->data = buf; bytes->count = (int)got;\n"
       "    SageValue v; v.type = SAGE_TAG_BYTES; v.as.bytes = bytes; return v;\n"
@@ -7883,7 +7898,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    SageBytes* b = (SageBytes*)sage_gc_alloc(SAGE_GC_BYTES, sizeof(SageBytes));\n"
       "    size_t alloc = len > 0 ? (size_t)len : 1;\n"
       "    b->data = (unsigned char*)malloc(alloc);\n"
-      "    if (!b->data) { free(b); return sage_nil(); }\n"
+      "    if (!b->data) { return sage_nil(); }\n"
       "    memset(b->data, 0, alloc);\n"
       "    b->count = (int)len;\n"
       "    SageValue v; v.type = SAGE_TAG_BYTES; v.as.bytes = b; return v;\n"
@@ -7932,7 +7947,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    SageBytes* b = (SageBytes*)sage_gc_alloc(SAGE_GC_BYTES, sizeof(SageBytes));\n"
       "    size_t alloc = len > 0 ? (size_t)len : 1;\n"
       "    b->data = (unsigned char*)malloc(alloc);\n"
-      "    if (!b->data) { free(b); return sage_nil(); }\n"
+      "    if (!b->data) { return sage_nil(); }\n"
       "    memset(b->data, (unsigned char)(int)v.as.number, alloc);\n"
       "    b->count = (int)len;\n"
       "    SageValue r; r.type = SAGE_TAG_BYTES; r.as.bytes = b; return r;\n"
@@ -8028,7 +8043,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    long a = (long long)rs, b = (long long)re;\n"
       "    if (a < 0) a = 0;\n"
       "    if (b > (long)v.as.bytes->count) b = (long)v.as.bytes->count;\n"
-      "    SageBytes* out = (SageBytes*)malloc(sizeof(SageBytes));\n"
+      "    SageBytes* out = (SageBytes*)sage_gc_alloc(SAGE_GC_BYTES, sizeof(SageBytes));\n"
       "    if (!out) return sage_nil();\n"
       "    size_t alloc = b > a ? (size_t)(b - a) : 1;\n"
       "    out->data = (unsigned char*)malloc(alloc);\n"
@@ -9357,11 +9372,11 @@ static void emit_captured_slot_initialization(Compiler *compiler,
 static void emit_slot_frame_setup(Compiler *compiler, NameEntry *locals,
                                     const char *roots_name,
                                     const char *frame_name,
-                                    int with_temp_roots) {
+                                    int temp_slots) {
     int count = count_name_entries(locals);
     /* The temporary pool is rooted alongside the named locals, so a value spilled
      * while a sibling operand is still being evaluated survives a collection. */
-    int temps = with_temp_roots ? SAGE_TMP_SLOTS : 0;
+    int temps = temp_slots;
     int total = count + temps;
 
     if (total == 0) {
@@ -9573,6 +9588,65 @@ static void emit_nested_function_definitions(Compiler *compiler,
 static void emit_captured_slot_initialization(Compiler *compiler,
                                              NameEntry *locals);
 
+/* Function bodies are emitted into a memory stream first so the compiler can
+ * learn how many expression-temporary slots the body actually uses. The pool is
+ * then declared and rooted at that exact size instead of the global maximum.
+ * main keeps the full pool because it runs once; hot methods and procedures
+ * usually need only a handful of slots. */
+typedef struct {
+  FILE *saved_out;
+  FILE *stream;
+  char *buffer;
+  size_t length;
+  int saved_tmp_depth;
+  int saved_max_tmp_depth;
+} BodyCapture;
+
+static int body_capture_begin(Compiler *compiler, BodyCapture *capture) {
+  capture->saved_out = compiler->out;
+  capture->buffer = NULL;
+  capture->length = 0;
+  capture->stream = open_memstream(&capture->buffer, &capture->length);
+  if (capture->stream == NULL) {
+    return 0;
+  }
+  capture->saved_tmp_depth = compiler->tmp_depth;
+  capture->saved_max_tmp_depth = compiler->max_tmp_depth;
+  compiler->out = capture->stream;
+  compiler->tmp_depth = 0;
+  compiler->max_tmp_depth = 0;
+  return 1;
+}
+
+static int body_capture_end(Compiler *compiler, BodyCapture *capture) {
+  fclose(capture->stream);
+  compiler->out = capture->saved_out;
+  int temp_slots = compiler->max_tmp_depth;
+  if (temp_slots < 2) {
+    temp_slots = 2;
+  }
+  compiler->tmp_depth = capture->saved_tmp_depth;
+  compiler->max_tmp_depth = capture->saved_max_tmp_depth;
+  return temp_slots;
+}
+
+static void emit_temp_pool(Compiler *compiler, int temp_slots) {
+  emit_line(compiler, "SageSlot sage_tmp[%d];", temp_slots);
+  emit_line(compiler,
+            "for (int _t = 0; _t < %d; _t++) sage_tmp[_t] = "
+            "sage_slot_undefined();",
+            temp_slots);
+}
+
+static void emit_captured_body(Compiler *compiler, BodyCapture *capture) {
+  if (capture->length > 0) {
+    fwrite(capture->buffer, 1, capture->length, compiler->out);
+  }
+  free(capture->buffer);
+  capture->buffer = NULL;
+  capture->length = 0;
+}
+
 static void emit_sage_function_definition(Compiler *compiler,
                                            FunctionInfo *function) {
   ProcStmt *proc_stmt = function->proc;
@@ -9655,14 +9729,11 @@ static void emit_sage_function_definition(Compiler *compiler,
   compiler->indent++;
 
   emit_slot_declarations(compiler, compiler->locals);
-  /* Expression temporaries. Initialised because they are automatic storage: an
-   * undefined SageSlot must not look like a live heap pointer to the collector's
-   * mark loop. */
-  emit_line(compiler, "SageSlot sage_tmp[SAGE_TMP_SLOTS];");
-  emit_line(compiler, "for (int _t = 0; _t < SAGE_TMP_SLOTS; _t++) sage_tmp[_t] = sage_slot_undefined();");
-  compiler->tmp_depth = 0;
-  emit_slot_frame_setup(compiler, compiler->locals, "sage_gc_roots",
-                        "sage_gc_frame", 1);
+  BodyCapture capture;
+  if (!body_capture_begin(compiler, &capture)) {
+    compiler_error(compiler, "out of memory capturing function body");
+    goto function_cleanup;
+  }
   if (environment_slot != NULL) {
     emit_line(compiler,
               "sage_define_slot(&%s, sage_function_value("
@@ -9711,11 +9782,17 @@ static void emit_sage_function_definition(Compiler *compiler,
   emit_stmt_list(compiler, proc_stmt->body);
   compiler->in_function_body = previous_in_function_body;
   emit_line(compiler, "return sage_gc_return(&sage_gc_frame, sage_nil());");
+  int temp_slots = body_capture_end(compiler, &capture);
+  emit_temp_pool(compiler, temp_slots);
+  emit_slot_frame_setup(compiler, compiler->locals, "sage_gc_roots",
+                        "sage_gc_frame", temp_slots);
+  emit_captured_body(compiler, &capture);
 
   compiler->indent--;
   emit_line(compiler, "}");
   fputc('\n', compiler->out);
 
+function_cleanup:
   free_name_entries(compiler->locals);
   compiler->locals = previous_locals;
   compiler->current_function = previous_function;
@@ -9807,14 +9884,11 @@ static void emit_method_definition(Compiler *compiler, ClassInfo *cls,
   compiler->indent++;
 
   emit_slot_declarations(compiler, compiler->locals);
-  /* Expression temporaries. Initialised because they are automatic storage: an
-   * undefined SageSlot must not look like a live heap pointer to the collector's
-   * mark loop. */
-  emit_line(compiler, "SageSlot sage_tmp[SAGE_TMP_SLOTS];");
-  emit_line(compiler, "for (int _t = 0; _t < SAGE_TMP_SLOTS; _t++) sage_tmp[_t] = sage_slot_undefined();");
-  compiler->tmp_depth = 0;
-  emit_slot_frame_setup(compiler, compiler->locals, "sage_gc_roots",
-                        "sage_gc_frame", 1);
+  BodyCapture capture;
+  if (!body_capture_begin(compiler, &capture)) {
+    compiler_error(compiler, "out of memory capturing method body");
+    goto method_cleanup;
+  }
   emit_captured_slot_initialization(compiler, compiler->locals);
 
   /* Bind self */
@@ -9853,11 +9927,17 @@ static void emit_method_definition(Compiler *compiler, ClassInfo *cls,
   emit_stmt_list(compiler, proc->body);
   compiler->in_function_body = 0;
   emit_line(compiler, "return sage_gc_return(&sage_gc_frame, sage_nil());");
+  int temp_slots = body_capture_end(compiler, &capture);
+  emit_temp_pool(compiler, temp_slots);
+  emit_slot_frame_setup(compiler, compiler->locals, "sage_gc_roots",
+                        "sage_gc_frame", temp_slots);
+  emit_captured_body(compiler, &capture);
 
   compiler->indent--;
   emit_line(compiler, "}");
   fputc('\n', compiler->out);
 
+method_cleanup:
   free_name_entries(compiler->locals);
   compiler->gc_return_slot = previous_return_slot;
   compiler->gc_match_slot = previous_match_slot;
@@ -9976,7 +10056,7 @@ static void emit_main_function(Compiler *compiler, Stmt *program,
     emit_line(compiler, "%s = sage_slot_undefined();", global->c_name);
   }
   emit_slot_frame_setup(compiler, compiler->globals, "sage_gc_global_roots",
-                        "sage_gc_main_frame", 1);
+                        "sage_gc_main_frame", SAGE_TMP_SLOTS);
 
   /* Register classes and methods */
   for (ClassInfo *cls = compiler->classes; cls != NULL; cls = cls->next) {
@@ -9985,7 +10065,7 @@ static void emit_main_function(Compiler *compiler, Stmt *program,
                 "sage_register_struct(\"%s\", (const char*[]){", cls->class_name);
       for (int i = 0; i < cls->field_count; i++) {
         char *field = escape_c_string(cls->field_names[i]);
-        emit_line(compiler, "    \"%s\"%s", field,
+        emit_line(compiler, "    sage_string_const(\"%s\").as.string%s", field,
                   i + 1 < cls->field_count ? "," : "");
         free(field);
       }
