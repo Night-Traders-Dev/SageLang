@@ -327,6 +327,16 @@ static char *escape_c_string(const char *text) {
   return sb_take(&sb);
 }
 
+static unsigned int emit_fnv1a(const char *text) {
+  unsigned int h = 2166136261u;
+  const unsigned char *p = (const unsigned char *)text;
+  while (*p != '\0') {
+    h ^= *p++;
+    h *= 16777619u;
+  }
+  return h;
+}
+
 static void free_name_entries(NameEntry *entry) {
   while (entry != NULL) {
     NameEntry *next = entry->next;
@@ -2392,18 +2402,32 @@ static char *emit_array_expr(Compiler *compiler, ArrayExpr *array) {
 
 static char *emit_index_expr(Compiler *compiler, IndexExpr *index) {
   char *array_expr = emit_expr(compiler, index->array);
-  char *index_expr = emit_expr(compiler, index->index);
   if (compiler->failed) {
     free(array_expr);
-    free(index_expr);
     return str_dup("sage_nil()");
   }
 
   StringBuffer sb;
   sb_init(&sb);
-  sb_appendf(&sb, "sage_index(%s, %s)", array_expr, index_expr);
+  if (index->index->type == EXPR_STRING) {
+    const char *value = index->index->as.string.value;
+    char *escaped = escape_c_string(value);
+    sb_appendf(&sb,
+               "sage_index_lit(%s, sage_string_const(\"%s\").as.string, %u)",
+               array_expr, escaped, emit_fnv1a(value));
+    free(escaped);
+  } else {
+    char *index_expr = emit_expr(compiler, index->index);
+    if (compiler->failed) {
+      free(array_expr);
+      free(index_expr);
+      free(sb_take(&sb));
+      return str_dup("sage_nil()");
+    }
+    sb_appendf(&sb, "sage_index(%s, %s)", array_expr, index_expr);
+    free(index_expr);
+  }
   free(array_expr);
-  free(index_expr);
   return sb_take(&sb);
 }
 
@@ -4617,9 +4641,9 @@ static char *emit_set_expr(Compiler *compiler, SetExpr *set) {
     sb_init(&sb);
     sb_appendf(&sb,
                "({SageValue _obj = %s; SageValue _val = %s; "
-               "sage_dict_set(_obj.as.dict, sage_string_const(\"%s\").as.string, "
-               "_val); _val;})",
-               obj, val, escaped);
+               "sage_dict_set_hashed(_obj.as.dict, "
+               "sage_string_const(\"%s\").as.string, %u, _val); _val;})",
+               obj, val, escaped, emit_fnv1a(prop));
     free(obj);
     free(prop);
     free(escaped);
@@ -4746,13 +4770,23 @@ static char *emit_expr(Compiler *compiler, Expr *expr) {
     return emit_index_expr(compiler, &expr->as.index);
   case EXPR_INDEX_SET: {
     char *arr = emit_expr(compiler, expr->as.index_set.array);
-    char *idx = emit_expr(compiler, expr->as.index_set.index);
     char *val = emit_expr(compiler, expr->as.index_set.value);
     StringBuffer sb;
     sb_init(&sb);
-    sb_appendf(&sb, "sage_index_set(%s, %s, %s)", arr, idx, val);
+    if (expr->as.index_set.index->type == EXPR_STRING) {
+      const char *key = expr->as.index_set.index->as.string.value;
+      char *escaped = escape_c_string(key);
+      sb_appendf(&sb,
+                 "sage_index_set_lit(%s, sage_string_const(\"%s\").as.string, "
+                 "%u, %s)",
+                 arr, escaped, emit_fnv1a(key), val);
+      free(escaped);
+    } else {
+      char *idx = emit_expr(compiler, expr->as.index_set.index);
+      sb_appendf(&sb, "sage_index_set(%s, %s, %s)", arr, idx, val);
+      free(idx);
+    }
     free(arr);
-    free(idx);
     free(val);
     return sb_take(&sb);
   }
@@ -4823,7 +4857,9 @@ static char *emit_expr(Compiler *compiler, Expr *expr) {
     char *escaped = escape_c_string(prop);
     StringBuffer sb;
     sb_init(&sb);
-    sb_appendf(&sb, "sage_index(%s, sage_string_const(\"%s\"))", object, escaped);
+    sb_appendf(&sb,
+               "sage_index_lit(%s, sage_string_const(\"%s\").as.string, %u)",
+               object, escaped, emit_fnv1a(prop));
     free(object);
     free(prop);
     free(escaped);
@@ -6064,7 +6100,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    sage_interned_hash_cache[slot].hash = sage_fnv1a_bytes("
         "(const unsigned char*)source, (int)strlen(source));\n"
         "}\n"
-        "static SageValue sage_string_const(const char* value) {\n"
+        "static inline SageValue sage_string_const(const char* value) {\n"
         "    if (value == NULL) value = \"\";\n"
         "    unsigned int cache_idx = (unsigned int)(((uintptr_t)value >> 3) & "
         "(SAGE_LITERAL_CACHE_CAPACITY - 1));\n"
@@ -6403,7 +6439,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    return h;\n"
         "}\n"
         "\n"
-        "static unsigned int sage_dict_hash(const char* key) {\n"
+        "static inline unsigned int sage_dict_hash(const char* key) {\n"
         "    if (key == NULL) key = \"\";\n"
         "    unsigned int slot = (unsigned int)(((uintptr_t)key >> 3) & "
         "(SAGE_INTERNED_HASH_CACHE_CAPACITY - 1));\n"
@@ -6432,7 +6468,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    }\n"
         "}\n"
         "\n"
-        "static int sage_dict_find_index_hashed(SageDict* dict, const char* key, "
+        "static inline int sage_dict_find_index_hashed(SageDict* dict, const char* key, "
         "unsigned int key_hash) {\n"
         "    if (dict->bucket_capacity == 0) return -1;\n"
         "    unsigned int mask = (unsigned int)(dict->bucket_capacity - 1);\n"
@@ -6466,9 +6502,8 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    return v;\n"
         "}\n"
         "\n"
-        "static void sage_dict_set(SageDict* dict, const char* key, SageValue "
-        "value) {\n"
-        "    unsigned int new_hash = sage_dict_hash(key);\n"
+        "static void sage_dict_set_hashed(SageDict* dict, const char* key, "
+        "unsigned int new_hash, SageValue value) {\n"
         "    int existing = sage_dict_find_index_hashed(dict, key, new_hash);\n"
         "    if (existing >= 0) {\n"
         "        dict->values[existing] = value;\n"
@@ -6507,6 +6542,11 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "        dict->buckets[h] = dict->count;\n"
         "    }\n"
         "}\n"
+        "\n"
+        "static void sage_dict_set(SageDict* dict, const char* key, SageValue "
+        "value) {\n"
+        "    sage_dict_set_hashed(dict, key, sage_dict_hash(key), value);\n"
+        "}\n"
         "\n",
         out);
   fputs(
@@ -6524,6 +6564,20 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "static SageValue sage_dict_get(SageDict* dict, const char* key) {\n"
       "    int idx = sage_dict_find_index(dict, key);\n"
       "    return idx >= 0 ? dict->values[idx] : sage_nil();\n"
+      "}\n"
+      "\n"
+      "static SageValue sage_index_lit(SageValue collection, const char* key, "
+      "unsigned int key_hash) {\n"
+      "    if (collection.type != SAGE_TAG_DICT) return sage_nil();\n"
+      "    int idx = sage_dict_find_index_hashed(collection.as.dict, key, "
+      "key_hash);\n"
+      "    return idx >= 0 ? collection.as.dict->values[idx] : sage_nil();\n"
+      "}\n"
+      "\n"
+      "static void sage_index_set_lit(SageValue collection, const char* key, "
+      "unsigned int key_hash, SageValue value) {\n"
+      "    if (collection.type != SAGE_TAG_DICT) return;\n"
+      "    sage_dict_set_hashed(collection.as.dict, key, key_hash, value);\n"
       "}\n"
       "\n"
       "static SageValue sage_hash_fn(SageValue value) {\n"
